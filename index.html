@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Beauty Manager | Relatórios Premium</title>
+    <title>Beauty Manager | Gestão Completa</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -14,7 +14,7 @@
         /* --- DESIGN (Branco, Cinza, Rosa, Preto) --- */
         :root {
             --bg-color: #F9F9F9; --card-bg: #FFFFFF; --text-main: #1A1A1A; --text-muted: #757575;
-            --accent-pink: #E91E63; --accent-green: #4CAF50; --accent-blue: #2196F3;
+            --accent-pink: #E91E63; --accent-green: #4CAF50; --accent-blue: #2196F3; --accent-red: #D32F2F;
             --accent-light: #FCE4EC; --border-color: #E0E0E0; --shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
         }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
@@ -114,10 +114,18 @@
         .app-date { font-size: 0.85rem; color: var(--accent-pink); font-weight: 700; background: var(--accent-light); padding: 4px 10px; border-radius: 12px; }
         .app-detail { font-size: 1rem; color: var(--text-muted); margin-bottom: 4px; }
         
+        /* BOTÕES DE AÇÃO */
         .action-buttons { display: flex; gap: 10px; margin-top: 15px; border-top: 1px dashed #eee; padding-top: 15px; flex-wrap: wrap; }
-        .btn-icon { flex: 1; min-width: 100px; padding: 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; font-weight: bold; text-transform: uppercase; display: flex; align-items: center; justify-content: center; gap: 5px; transition: 0.2s; }
+        .btn-icon { flex: 1; min-width: 80px; padding: 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem; font-weight: bold; text-transform: uppercase; display: flex; align-items: center; justify-content: center; gap: 5px; transition: 0.2s; }
+        
         .btn-edit { background-color: #E3F2FD; color: var(--accent-blue); }
+        .btn-edit:hover { background-color: var(--accent-blue); color: white; }
+        
         .btn-done { background-color: #E8F5E9; color: var(--accent-green); }
+        .btn-done:hover { background-color: var(--accent-green); color: white; }
+
+        .btn-delete { background-color: #FFEBEE; color: var(--accent-red); }
+        .btn-delete:hover { background-color: var(--accent-red); color: white; }
 
         .toggle-history-btn { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 0.95rem; text-decoration: underline; margin-top: 5px; }
         #completedContainer { display: none; margin-top: 30px; border-top: 2px dashed #eee; padding-top: 20px; }
@@ -136,7 +144,7 @@
 <body>
 
     <header>
-        <h1>STUDIO <span>RUBIA IBANEZ</span></h1>
+        <h1>STUDIO <span>RUBRIA IBANEZ</span></h1>
     </header>
 
     <div class="container">
@@ -294,6 +302,23 @@
             }
         });
 
+        // --- EXCLUIR AGENDAMENTO ---
+        window.deleteAppointment = async function(id) {
+            if(!confirm("Tem certeza que deseja cancelar e excluir permanentemente este agendamento?")) return;
+            setLoading(true);
+            try {
+                const { error } = await _supabase.from('agendamentos').delete().eq('id', id);
+                if (error) throw error;
+                showToast("Agendamento excluído/cancelado.", "success");
+                await fetchAppointments();
+            } catch (err) {
+                console.error(err);
+                showToast("Erro ao excluir.", "error");
+            } finally {
+                setLoading(false);
+            }
+        }
+
         window.completeAppointment = async function(id) {
             if(!confirm("Finalizar atendimento?")) return;
             setLoading(true);
@@ -342,7 +367,12 @@
                     <div class="app-detail"><strong>Cliente:</strong> ${app.client}</div>
                     <div class="app-detail"><strong>Prof.:</strong> ${app.professional}</div>
                     <div class="app-detail"><strong>Serviço:</strong> ${app.procedure}</div>
-                    ${!isDone ? `<div class="action-buttons"><button onclick="editAppointment(${app.id})" class="btn-icon btn-edit">✏️ Editar</button><button onclick="completeAppointment(${app.id})" class="btn-icon btn-done">✔️ Concluir</button></div>` : ''}
+                    ${!isDone ? `
+                        <div class="action-buttons">
+                            <button onclick="editAppointment(${app.id})" class="btn-icon btn-edit" title="Editar dados">✏️ Editar</button>
+                            <button onclick="deleteAppointment(${app.id})" class="btn-icon btn-delete" title="Cancelar/Excluir">🗑️ Excluir</button>
+                            <button onclick="completeAppointment(${app.id})" class="btn-icon btn-done" title="Finalizar serviço">✔️ Concluir</button>
+                        </div>` : ''}
                 </li>`;
         }
 
@@ -363,128 +393,53 @@
         // SISTEMA DE RELATÓRIOS PREMIUM
         // ==========================================================
 
-        // --- GERADOR EXCEL (XLSX) MULTI-ABAS ---
         window.generateExcel = function() {
             if(localAppointments.length === 0) { showToast("Sem dados para exportar.", "error"); return; }
-
-            // Separa os dados
             const openApps = localAppointments.filter(a => a.status !== 'completed');
             const doneApps = localAppointments.filter(a => a.status === 'completed');
-
-            // Formata para Excel
-            const formatForExcel = (list) => list.map(i => ({
-                "DATA": formatDate(i.date),
-                "HORÁRIO": `${i.start} - ${i.end}`,
-                "CLIENTE": i.client,
-                "PROFISSIONAL": i.professional,
-                "PROCEDIMENTO": i.procedure
-            }));
-
+            const formatForExcel = (list) => list.map(i => ({ "DATA": formatDate(i.date), "HORÁRIO": `${i.start} - ${i.end}`, "CLIENTE": i.client, "PROFISSIONAL": i.professional, "PROCEDIMENTO": i.procedure }));
             const wb = XLSX.utils.book_new();
-
-            // Configuração de largura de colunas
             const colWidths = [{wch:12}, {wch:15}, {wch:25}, {wch:20}, {wch:25}];
 
-            // Aba 1: Em Aberto
             if (openApps.length > 0) {
-                const wsOpen = XLSX.utils.json_to_sheet(formatForExcel(openApps));
-                wsOpen['!cols'] = colWidths;
+                const wsOpen = XLSX.utils.json_to_sheet(formatForExcel(openApps)); wsOpen['!cols'] = colWidths;
                 XLSX.utils.book_append_sheet(wb, wsOpen, "Em Aberto");
-            } else {
-                // Cria aba vazia se não tiver dados
-                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{Info: "Nenhum agendamento"}]), "Em Aberto");
-            }
+            } else { XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{Info: "Vazio"}]), "Em Aberto"); }
 
-            // Aba 2: Finalizados
             if (doneApps.length > 0) {
-                const wsDone = XLSX.utils.json_to_sheet(formatForExcel(doneApps));
-                wsDone['!cols'] = colWidths;
+                const wsDone = XLSX.utils.json_to_sheet(formatForExcel(doneApps)); wsDone['!cols'] = colWidths;
                 XLSX.utils.book_append_sheet(wb, wsDone, "Finalizados");
-            } else {
-                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{Info: "Nenhum finalizado"}]), "Finalizados");
-            }
+            } else { XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{Info: "Vazio"}]), "Finalizados"); }
 
             XLSX.writeFile(wb, "Relatorio_Salao_Completo.xlsx");
         }
 
-        // --- GERADOR PDF DETALHADO ---
         window.generatePDF = function() {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
-            const data = localAppointments;
-
+            const { jsPDF } = window.jspdf; const doc = new jsPDF(); const data = localAppointments;
             if(data.length === 0) { showToast("Sem dados.", "error"); return; }
-
-            // Estatísticas
             const totalOpen = data.filter(d => d.status !== 'completed').length;
             const totalDone = data.filter(d => d.status === 'completed').length;
 
-            // Cabeçalho do PDF
-            doc.setFontSize(18);
-            doc.setTextColor(26, 26, 26);
-            doc.text("Relatório Geral - Beauty Manager", 14, 20);
-            
-            doc.setFontSize(10);
-            doc.setTextColor(100);
-            doc.text(`Gerado em: ${new Date().toLocaleString()}`, 14, 26);
+            doc.setFontSize(18); doc.setTextColor(26, 26, 26); doc.text("Relatório Geral - Beauty Manager", 14, 20);
+            doc.setFontSize(10); doc.setTextColor(100); doc.text(`Gerado em: ${new Date().toLocaleString()}`, 14, 26);
             doc.text(`Resumo: ${totalOpen} Agendados | ${totalDone} Finalizados`, 14, 31);
 
-            // Definição de Colunas
             const headers = [["DATA", "HORÁRIO", "CLIENTE", "PROFISSIONAL", "PROCEDIMENTO"]];
             const buildRow = (i) => [formatDate(i.date), `${i.start} - ${i.end}`, i.client, i.professional, i.procedure];
-
-            // Separação de Dados
             const openItems = data.filter(d => d.status !== 'completed');
             const doneItems = data.filter(d => d.status === 'completed');
-
             let finalY = 40;
 
-            // TABELA 1: EM ABERTO (ROSA)
             if (openItems.length > 0) {
-                doc.setFontSize(13);
-                doc.setTextColor(233, 30, 99); // Rosa
-                doc.text("AGENDAMENTOS EM ABERTO", 14, finalY);
-                
-                doc.autoTable({
-                    startY: finalY + 3,
-                    head: headers,
-                    body: openItems.map(buildRow),
-                    theme: 'striped',
-                    headStyles: { fillColor: [233, 30, 99], fontStyle: 'bold' }, // Cabeçalho Rosa
-                    styles: { fontSize: 10, cellPadding: 3 },
-                    columnStyles: { 0: {cellWidth: 25}, 1: {cellWidth: 30} }
-                });
-                
+                doc.setFontSize(13); doc.setTextColor(233, 30, 99); doc.text("AGENDAMENTOS EM ABERTO", 14, finalY);
+                doc.autoTable({ startY: finalY + 3, head: headers, body: openItems.map(buildRow), theme: 'striped', headStyles: { fillColor: [233, 30, 99], fontStyle: 'bold' }, styles: { fontSize: 10, cellPadding: 3 }, columnStyles: { 0: {cellWidth: 25}, 1: {cellWidth: 30} } });
                 finalY = doc.lastAutoTable.finalY + 15;
             }
 
-            // TABELA 2: FINALIZADOS (VERDE)
             if (doneItems.length > 0) {
-                doc.setFontSize(13);
-                doc.setTextColor(76, 175, 80); // Verde
-                doc.text("HISTÓRICO DE FINALIZADOS", 14, finalY);
-                
-                doc.autoTable({
-                    startY: finalY + 3,
-                    head: headers,
-                    body: doneItems.map(buildRow),
-                    theme: 'striped',
-                    headStyles: { fillColor: [76, 175, 80], fontStyle: 'bold' }, // Cabeçalho Verde
-                    styles: { fontSize: 10, cellPadding: 3 },
-                    columnStyles: { 0: {cellWidth: 25}, 1: {cellWidth: 30} }
-                });
+                doc.setFontSize(13); doc.setTextColor(76, 175, 80); doc.text("HISTÓRICO DE FINALIZADOS", 14, finalY);
+                doc.autoTable({ startY: finalY + 3, head: headers, body: doneItems.map(buildRow), theme: 'striped', headStyles: { fillColor: [76, 175, 80], fontStyle: 'bold' }, styles: { fontSize: 10, cellPadding: 3 }, columnStyles: { 0: {cellWidth: 25}, 1: {cellWidth: 30} } });
             }
-
-            // Rodapé
-            const pageCount = doc.internal.getNumberOfPages();
-            for(let i = 1; i <= pageCount; i++) {
-                doc.setPage(i);
-                doc.setFontSize(8);
-                doc.setTextColor(150);
-                doc.text('Beauty Manager System', 14, doc.internal.pageSize.height - 10);
-                doc.text('Página ' + i, doc.internal.pageSize.width - 25, doc.internal.pageSize.height - 10);
-            }
-
             doc.save("Relatorio_Salao_Detalhado.pdf");
         }
 
