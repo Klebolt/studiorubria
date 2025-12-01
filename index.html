@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beauty Manager | Relatórios Premium</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <style>
+        /* --- DESIGN (Branco, Cinza, Rosa, Preto) --- */
+        :root {
+            --bg-color: #F9F9F9; --card-bg: #FFFFFF; --text-main: #1A1A1A; --text-muted: #757575;
+            --accent-pink: #E91E63; --accent-green: #4CAF50; --accent-blue: #2196F3;
+            --accent-light: #FCE4EC; --border-color: #E0E0E0; --shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
+        
+        body { 
+            background-color: var(--bg-color); color: var(--text-main); line-height: 1.6; 
+            padding-bottom: 80px; font-size: 16px; overflow-x: hidden; 
+        }
+
+        /* HEADER */
+        header {
+            background-color: var(--card-bg); padding: 25px 0; border-bottom: 1px solid var(--border-color);
+            text-align: center; margin-bottom: 30px; position: sticky; top: 0; z-index: 100;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02); width: 100%;
+        }
+        header h1 { font-weight: 300; letter-spacing: 2px; text-transform: uppercase; font-size: 1.8rem; padding: 0 10px; }
+        header span { color: var(--accent-pink); font-weight: 600; white-space: nowrap; }
+
+        /* LAYOUT RESPONSIVO */
+        .container {
+            max-width: 1100px; margin: 0 auto; padding: 0 20px;
+            display: grid; gap: 30px; grid-template-columns: 1fr;
+        }
+        @media(min-width: 850px) { .container { grid-template-columns: 350px 1fr; } }
+        @media(max-width: 480px) { .container { padding: 0 15px; gap: 20px; } }
+
+        .card {
+            background: var(--card-bg); border-radius: 8px; padding: 30px;
+            box-shadow: var(--shadow); border: 1px solid var(--border-color); width: 100%; height: fit-content;
+        }
+
+        .section-title {
+            font-size: 1.35rem; margin-bottom: 25px; border-left: 5px solid var(--accent-pink);
+            padding-left: 15px; text-transform: uppercase; letter-spacing: 1px;
+            display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
+        }
+
+        /* FORMULÁRIO */
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-size: 0.9rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; }
+        input {
+            width: 100%; padding: 12px 14px; border: 1px solid var(--border-color);
+            border-radius: 4px; font-size: 1.05rem; background: #FAFAFA; transition: 0.3s;
+            -webkit-appearance: none;
+        }
+        input:focus { border-color: var(--accent-pink); background: #FFF; outline: none; }
+
+        .time-group-container { display: flex; gap: 15px; }
+        @media(max-width: 350px) { .time-group-container { flex-direction: column; gap: 10px; } }
+
+        .btn-submit {
+            width: 100%; padding: 14px; background-color: var(--text-main); color: #FFF;
+            border: none; border-radius: 4px; font-size: 1rem; cursor: pointer;
+            text-transform: uppercase; font-weight: bold; margin-top: 10px; transition: 0.3s;
+        }
+        .btn-submit:hover { background-color: var(--accent-pink); }
+        .btn-submit.editing { background-color: var(--accent-blue); }
+        
+        .btn-cancel-edit {
+            width: 100%; padding: 10px; background: transparent; color: var(--text-muted);
+            border: 1px solid var(--border-color); margin-top: 8px; cursor: pointer; border-radius: 4px; display: none;
+            font-size: 0.9rem;
+        }
+
+        /* EXPORTAÇÃO E FILTROS */
+        .export-area { display: flex; gap: 10px; flex-wrap: wrap; }
+        .btn-export {
+            font-size: 0.85rem; padding: 8px 16px; border: 1px solid var(--border-color);
+            background: white; color: var(--text-main); border-radius: 20px; cursor: pointer;
+            transition: all 0.2s; display: flex; align-items: center; gap: 6px; font-weight: 600; white-space: nowrap;
+        }
+        .btn-export:hover { border-color: var(--text-main); transform: translateY(-2px); box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .btn-export.pdf:hover { color: #D32F2F; border-color: #D32F2F; }
+        .btn-export.xls:hover { color: #388E3C; border-color: #388E3C; }
+
+        .filter-container {
+            background: var(--accent-light); padding: 20px; border-radius: 6px; margin-bottom: 25px;
+            display: grid; gap: 15px; grid-template-columns: 1fr;
+        }
+        @media(min-width: 600px) { .filter-container { grid-template-columns: 2fr 1fr; } }
+
+        /* LISTA */
+        .appointment-list { list-style: none; padding-right: 0; }
+        .appointment-item {
+            background: #fff; border-left: 5px solid var(--text-muted); padding: 20px;
+            margin-bottom: 18px; border-radius: 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+            border: 1px solid #f5f5f5; position: relative;
+            transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.3s ease;
+            word-wrap: break-word;
+        }
+        .appointment-item:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.08); border-left-width: 8px; }
+        .appointment-item.completed { border-left-color: var(--accent-green); opacity: 0.7; background-color: #fcfcfc; }
+        .appointment-item.completed:hover { opacity: 1; }
+
+        .app-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid #eee; padding-bottom: 10px; flex-wrap: wrap; gap: 5px; }
+        .app-time { font-size: 1.25rem; font-weight: 800; color: var(--text-main); }
+        .app-date { font-size: 0.85rem; color: var(--accent-pink); font-weight: 700; background: var(--accent-light); padding: 4px 10px; border-radius: 12px; }
+        .app-detail { font-size: 1rem; color: var(--text-muted); margin-bottom: 4px; }
+        
+        .action-buttons { display: flex; gap: 10px; margin-top: 15px; border-top: 1px dashed #eee; padding-top: 15px; flex-wrap: wrap; }
+        .btn-icon { flex: 1; min-width: 100px; padding: 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; font-weight: bold; text-transform: uppercase; display: flex; align-items: center; justify-content: center; gap: 5px; transition: 0.2s; }
+        .btn-edit { background-color: #E3F2FD; color: var(--accent-blue); }
+        .btn-done { background-color: #E8F5E9; color: var(--accent-green); }
+
+        .toggle-history-btn { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 0.95rem; text-decoration: underline; margin-top: 5px; }
+        #completedContainer { display: none; margin-top: 30px; border-top: 2px dashed #eee; padding-top: 20px; }
+        #completedContainer.show { display: block; animation: slideDown 0.3s ease-out; }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* TOAST E LOADER */
+        #toast { visibility: hidden; width: 90%; max-width: 400px; background-color: #333; color: #fff; text-align: center; border-radius: 6px; padding: 18px; position: fixed; z-index: 999; left: 50%; bottom: 30px; transform: translateX(-50%); font-size: 1rem; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        #toast.show { visibility: visible; animation: fadein 0.5s, fadeout 0.5s 4.5s; }
+        #toast.error { background-color: var(--accent-pink); }
+        #toast.success { background-color: var(--text-main); }
+        @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
+        @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>STUDIO <span>RUBIA IBANEZ</span></h1>
+    </header>
+
+    <div class="container">
+        
+        <section class="card">
+            <h2 class="section-title" id="formTitle">Novo Agendamento</h2>
+            <form id="bookingForm">
+                <input type="hidden" id="editId" value="">
+                
+                <div class="form-group"><label>Nome do Cliente</label><input type="text" id="clientName" placeholder="Nome completo" required></div>
+                <div class="form-group"><label>Procedimento</label><input type="text" id="procedure" placeholder="Ex: Corte, Manicure..." required></div>
+                <div class="form-group"><label>Profissional</label><input type="text" id="professional" placeholder="Quem irá atender?" required></div>
+                <div class="form-group"><label>Data</label><input type="date" id="date" required></div>
+                
+                <div class="time-group-container">
+                    <div class="form-group" style="flex: 1;"><label>Início</label><input type="time" id="startTime" required></div>
+                    <div class="form-group" style="flex: 1;"><label>Fim</label><input type="time" id="endTime" required></div>
+                </div>
+
+                <button type="submit" id="submitBtn" class="btn-submit">Salvar Agendamento</button>
+                <button type="button" id="cancelEditBtn" class="btn-cancel-edit">Cancelar Edição</button>
+            </form>
+        </section>
+
+        <section class="card">
+            <div class="section-title">
+                <span>Agenda Online</span>
+                <div class="export-area">
+                    <button onclick="generatePDF()" class="btn-export pdf">📄 PDF Pro</button>
+                    <button onclick="generateExcel()" class="btn-export xls">📊 Excel Pro</button>
+                </div>
+            </div>
+
+            <div class="filter-container">
+                <input type="text" id="searchInput" placeholder="Buscar Cliente ou Profissional..." style="margin-bottom:0;">
+                <input type="date" id="searchDate" style="margin-bottom:0;">
+            </div>
+
+            <h3 style="font-size: 0.95rem; margin-bottom: 12px; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Em Aberto</h3>
+            <div id="activeContainer"><p style="text-align:center; color:#999; padding:20px;">Carregando...</p></div>
+
+            <div style="text-align: right; margin-top: 15px;">
+                <button class="toggle-history-btn" id="toggleHistoryBtn" onclick="toggleHistory()">Ver Finalizados</button>
+            </div>
+
+            <div id="completedContainer">
+                <h3 style="font-size: 0.95rem; margin-bottom: 12px; color: var(--accent-green); text-transform: uppercase; font-weight: 700;">Finalizados</h3>
+                <div id="historyList"></div>
+            </div>
+        </section>
+    </div>
+
+    <div id="toast"></div>
+
+    <script>
+        // ==========================================================
+        // SUAS CREDENCIAIS SUPABASE
+        // ==========================================================
+        const SUPABASE_URL = 'https://eavewcjgtgzhcyvallni.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_5p6VqPrKkyxBtwbuaO8NSg_0H2ElhbU';
+
+        // Inicializa conexão
+        const { createClient } = supabase;
+        const _supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        let localAppointments = []; // Cache
+
+        // DOM
+        const form = document.getElementById('bookingForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const cancelEditBtn = document.getElementById('cancelEditBtn');
+        const formTitle = document.getElementById('formTitle');
+        const editIdInput = document.getElementById('editId');
+        const activeContainer = document.getElementById('activeContainer');
+        const historyList = document.getElementById('historyList');
+        const searchInput = document.getElementById('searchInput');
+        const searchDate = document.getElementById('searchDate');
+        const toast = document.getElementById('toast');
+
+        // INICIALIZAÇÃO
+        document.addEventListener('DOMContentLoaded', () => {
+            searchDate.valueAsDate = new Date(); 
+            fetchAppointments();
+        });
+
+        searchInput.addEventListener('input', renderLists);
+        searchDate.addEventListener('change', renderLists);
+        cancelEditBtn.addEventListener('click', resetFormMode);
+
+        // --- 1. LÓGICA DE DADOS (SUPABASE) ---
+        async function fetchAppointments() {
+            try {
+                const { data, error } = await _supabase.from('agendamentos').select('*');
+                if (error) throw error;
+
+                // Ordena por data e hora
+                data.sort((a, b) => {
+                    if (a.date !== b.date) return a.date.localeCompare(b.date);
+                    return a.start.localeCompare(b.start);
+                });
+
+                localAppointments = data;
+                renderLists();
+            } catch (err) {
+                console.error(err);
+                showToast("Erro ao carregar dados.", "error");
+            }
+        }
+
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            setLoading(true);
+
+            const isEditing = editIdInput.value !== "";
+            const appData = {
+                client: document.getElementById('clientName').value.trim(),
+                procedure: document.getElementById('procedure').value.trim(),
+                professional: document.getElementById('professional').value.trim(),
+                date: document.getElementById('date').value,
+                start: document.getElementById('startTime').value,
+                end: document.getElementById('endTime').value,
+                status: 'open'
+            };
+
+            if (appData.start >= appData.end) {
+                showToast("Erro: Horário final inválido.", "error");
+                setLoading(false);
+                return;
+            }
+
+            if (checkConflict(appData, localAppointments, isEditing ? parseInt(editIdInput.value) : null)) {
+                showToast(`CONFLITO: ${appData.professional} já ocupado!`, "error");
+                setLoading(false);
+                return;
+            }
+
+            try {
+                if (isEditing) {
+                    const id = parseInt(editIdInput.value);
+                    const { error } = await _supabase.from('agendamentos').update(appData).eq('id', id);
+                    if (error) throw error;
+                    showToast("Atualizado!", "success");
+                    resetFormMode();
+                } else {
+                    const { error } = await _supabase.from('agendamentos').insert([appData]);
+                    if (error) throw error;
+                    showToast("Salvo!", "success");
+                    form.reset();
+                }
+                await fetchAppointments();
+            } catch (err) {
+                showToast("Erro ao salvar.", "error");
+            } finally {
+                setLoading(false);
+            }
+        });
+
+        window.completeAppointment = async function(id) {
+            if(!confirm("Finalizar atendimento?")) return;
+            setLoading(true);
+            try {
+                const { error } = await _supabase.from('agendamentos').update({ status: 'completed' }).eq('id', id);
+                if (error) throw error;
+                showToast("Concluído!", "success");
+                await fetchAppointments();
+            } catch (err) {
+                showToast("Erro ao atualizar.", "error");
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        // --- 2. LÓGICA DE INTERFACE ---
+        function checkConflict(newApp, allApps, ignoreId) {
+            return allApps.some(existing => {
+                if (existing.id == ignoreId || existing.status === 'completed') return false; 
+                if (existing.date !== newApp.date || existing.professional.toLowerCase() !== newApp.professional.toLowerCase()) return false;
+                return (newApp.start < existing.end && newApp.end > existing.start);
+            });
+        }
+
+        function renderLists() {
+            const txt = searchInput.value.toLowerCase();
+            const dt = searchDate.value;
+            
+            const filtered = localAppointments.filter(app => {
+                const matchTxt = (app.client || '').toLowerCase().includes(txt) || (app.professional || '').toLowerCase().includes(txt);
+                const matchDt = dt ? app.date === dt : true;
+                return matchTxt && matchDt;
+            });
+
+            const active = filtered.filter(a => a.status !== 'completed');
+            const completed = filtered.filter(a => a.status === 'completed');
+
+            activeContainer.innerHTML = active.length ? `<ul class="appointment-list">${active.map(a => renderCard(a, false)).join('')}</ul>` : '<p style="color:#ccc;text-align:center;padding:15px;font-style:italic;">Nenhum agendamento pendente.</p>';
+            historyList.innerHTML = completed.length ? `<ul class="appointment-list">${completed.map(a => renderCard(a, true)).join('')}</ul>` : '<p style="color:#ccc;text-align:center;padding:15px;font-style:italic;">Nenhum finalizado.</p>';
+        }
+
+        function renderCard(app, isDone) {
+            return `
+                <li class="appointment-item ${isDone ? 'completed' : ''}">
+                    <div class="app-header"><span class="app-time">${app.start} - ${app.end}</span><span class="app-date">${formatDate(app.date)}</span></div>
+                    <div class="app-detail"><strong>Cliente:</strong> ${app.client}</div>
+                    <div class="app-detail"><strong>Prof.:</strong> ${app.professional}</div>
+                    <div class="app-detail"><strong>Serviço:</strong> ${app.procedure}</div>
+                    ${!isDone ? `<div class="action-buttons"><button onclick="editAppointment(${app.id})" class="btn-icon btn-edit">✏️ Editar</button><button onclick="completeAppointment(${app.id})" class="btn-icon btn-done">✔️ Concluir</button></div>` : ''}
+                </li>`;
+        }
+
+        window.editAppointment = function(id) {
+            const app = localAppointments.find(a => a.id === id); if (!app) return;
+            document.getElementById('clientName').value = app.client;
+            document.getElementById('procedure').value = app.procedure;
+            document.getElementById('professional').value = app.professional;
+            document.getElementById('date').value = app.date;
+            document.getElementById('startTime').value = app.start;
+            document.getElementById('endTime').value = app.end;
+            editIdInput.value = app.id;
+            formTitle.innerText = "Editando..."; submitBtn.innerText = "Atualizar"; submitBtn.classList.add('editing'); cancelEditBtn.style.display = 'block';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // ==========================================================
+        // SISTEMA DE RELATÓRIOS PREMIUM
+        // ==========================================================
+
+        // --- GERADOR EXCEL (XLSX) MULTI-ABAS ---
+        window.generateExcel = function() {
+            if(localAppointments.length === 0) { showToast("Sem dados para exportar.", "error"); return; }
+
+            // Separa os dados
+            const openApps = localAppointments.filter(a => a.status !== 'completed');
+            const doneApps = localAppointments.filter(a => a.status === 'completed');
+
+            // Formata para Excel
+            const formatForExcel = (list) => list.map(i => ({
+                "DATA": formatDate(i.date),
+                "HORÁRIO": `${i.start} - ${i.end}`,
+                "CLIENTE": i.client,
+                "PROFISSIONAL": i.professional,
+                "PROCEDIMENTO": i.procedure
+            }));
+
+            const wb = XLSX.utils.book_new();
+
+            // Configuração de largura de colunas
+            const colWidths = [{wch:12}, {wch:15}, {wch:25}, {wch:20}, {wch:25}];
+
+            // Aba 1: Em Aberto
+            if (openApps.length > 0) {
+                const wsOpen = XLSX.utils.json_to_sheet(formatForExcel(openApps));
+                wsOpen['!cols'] = colWidths;
+                XLSX.utils.book_append_sheet(wb, wsOpen, "Em Aberto");
+            } else {
+                // Cria aba vazia se não tiver dados
+                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{Info: "Nenhum agendamento"}]), "Em Aberto");
+            }
+
+            // Aba 2: Finalizados
+            if (doneApps.length > 0) {
+                const wsDone = XLSX.utils.json_to_sheet(formatForExcel(doneApps));
+                wsDone['!cols'] = colWidths;
+                XLSX.utils.book_append_sheet(wb, wsDone, "Finalizados");
+            } else {
+                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{Info: "Nenhum finalizado"}]), "Finalizados");
+            }
+
+            XLSX.writeFile(wb, "Relatorio_Salao_Completo.xlsx");
+        }
+
+        // --- GERADOR PDF DETALHADO ---
+        window.generatePDF = function() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const data = localAppointments;
+
+            if(data.length === 0) { showToast("Sem dados.", "error"); return; }
+
+            // Estatísticas
+            const totalOpen = data.filter(d => d.status !== 'completed').length;
+            const totalDone = data.filter(d => d.status === 'completed').length;
+
+            // Cabeçalho do PDF
+            doc.setFontSize(18);
+            doc.setTextColor(26, 26, 26);
+            doc.text("Relatório Geral - Beauty Manager", 14, 20);
+            
+            doc.setFontSize(10);
+            doc.setTextColor(100);
+            doc.text(`Gerado em: ${new Date().toLocaleString()}`, 14, 26);
+            doc.text(`Resumo: ${totalOpen} Agendados | ${totalDone} Finalizados`, 14, 31);
+
+            // Definição de Colunas
+            const headers = [["DATA", "HORÁRIO", "CLIENTE", "PROFISSIONAL", "PROCEDIMENTO"]];
+            const buildRow = (i) => [formatDate(i.date), `${i.start} - ${i.end}`, i.client, i.professional, i.procedure];
+
+            // Separação de Dados
+            const openItems = data.filter(d => d.status !== 'completed');
+            const doneItems = data.filter(d => d.status === 'completed');
+
+            let finalY = 40;
+
+            // TABELA 1: EM ABERTO (ROSA)
+            if (openItems.length > 0) {
+                doc.setFontSize(13);
+                doc.setTextColor(233, 30, 99); // Rosa
+                doc.text("AGENDAMENTOS EM ABERTO", 14, finalY);
+                
+                doc.autoTable({
+                    startY: finalY + 3,
+                    head: headers,
+                    body: openItems.map(buildRow),
+                    theme: 'striped',
+                    headStyles: { fillColor: [233, 30, 99], fontStyle: 'bold' }, // Cabeçalho Rosa
+                    styles: { fontSize: 10, cellPadding: 3 },
+                    columnStyles: { 0: {cellWidth: 25}, 1: {cellWidth: 30} }
+                });
+                
+                finalY = doc.lastAutoTable.finalY + 15;
+            }
+
+            // TABELA 2: FINALIZADOS (VERDE)
+            if (doneItems.length > 0) {
+                doc.setFontSize(13);
+                doc.setTextColor(76, 175, 80); // Verde
+                doc.text("HISTÓRICO DE FINALIZADOS", 14, finalY);
+                
+                doc.autoTable({
+                    startY: finalY + 3,
+                    head: headers,
+                    body: doneItems.map(buildRow),
+                    theme: 'striped',
+                    headStyles: { fillColor: [76, 175, 80], fontStyle: 'bold' }, // Cabeçalho Verde
+                    styles: { fontSize: 10, cellPadding: 3 },
+                    columnStyles: { 0: {cellWidth: 25}, 1: {cellWidth: 30} }
+                });
+            }
+
+            // Rodapé
+            const pageCount = doc.internal.getNumberOfPages();
+            for(let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setFontSize(8);
+                doc.setTextColor(150);
+                doc.text('Beauty Manager System', 14, doc.internal.pageSize.height - 10);
+                doc.text('Página ' + i, doc.internal.pageSize.width - 25, doc.internal.pageSize.height - 10);
+            }
+
+            doc.save("Relatorio_Salao_Detalhado.pdf");
+        }
+
+        // --- AUXILIARES ---
+        function resetFormMode() { form.reset(); editIdInput.value = ""; formTitle.innerText = "Novo Agendamento"; submitBtn.innerText = "Salvar Agendamento"; submitBtn.classList.remove('editing'); cancelEditBtn.style.display = 'none'; }
+        function formatDate(s) { if(!s) return ''; const [y, m, d] = s.split('-'); return `${d}/${m}/${y}`; }
+        function showToast(msg, type) { toast.textContent = msg; toast.className = "show " + type; setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 4000); }
+        function setLoading(state) { form.style.opacity = state ? "0.5" : "1"; submitBtn.disabled = state; submitBtn.innerText = state ? "Processando..." : (editIdInput.value ? "Atualizar" : "Salvar Agendamento"); }
+        function toggleHistory() { const c = document.getElementById('completedContainer'); c.classList.toggle('show'); document.getElementById('toggleHistoryBtn').innerText = c.classList.contains('show') ? "Ocultar Finalizados" : "Ver Finalizados"; }
+    </script>
+</body>
+</html>
