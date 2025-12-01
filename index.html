@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Beauty Manager | Gestão Completa</title>
+    <title>Gerenciamento Studio Rubria</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -226,7 +226,7 @@
 
         // INICIALIZAÇÃO
         document.addEventListener('DOMContentLoaded', () => {
-            searchDate.valueAsDate = new Date(); 
+            // searchDate.valueAsDate = new Date(); // <--- LINHA REMOVIDA (Agora carrega tudo sem filtro)
             fetchAppointments();
         });
 
@@ -349,7 +349,7 @@
             
             const filtered = localAppointments.filter(app => {
                 const matchTxt = (app.client || '').toLowerCase().includes(txt) || (app.professional || '').toLowerCase().includes(txt);
-                const matchDt = dt ? app.date === dt : true;
+                const matchDt = dt ? app.date === dt : true; // Se dt for vazio, retorna true (mostra tudo)
                 return matchTxt && matchDt;
             });
 
